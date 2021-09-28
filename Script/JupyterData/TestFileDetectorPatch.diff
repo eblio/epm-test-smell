@@ -1,0 +1,107 @@
+diff --git a/pom.xml b/pom.xml
+index e4449be..b74953d 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -9,6 +9,17 @@
+     <version>0.1</version>
+     <build>
+         <plugins>
++            <plugin>
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-assembly-plugin</artifactId>
++                <configuration>
++                    <archive>
++                        <manifest>
++                            <mainClass>Main</mainClass>
++                        </manifest>
++                    </archive>
++                </configuration>
++            </plugin>
+             <plugin>
+                 <groupId>org.apache.maven.plugins</groupId>
+                 <artifactId>maven-compiler-plugin</artifactId>
+@@ -17,6 +28,50 @@
+                     <target>1.8</target>
+                 </configuration>
+             </plugin>
++            <plugin>
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-jar-plugin</artifactId>
++                <configuration>
++                    <archive>
++                        <manifestFile>src/resources/META-INF/MANIFEST.MF</manifestFile>
++                    </archive>
++                </configuration>
++            </plugin>
++
++            <plugin>
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-dependency-plugin</artifactId>
++                <executions>
++                    <execution>
++                        <id>copy-dependencies</id>
++                        <phase>package</phase>
++                        <goals>
++                            <goal>copy-dependencies</goal>
++                        </goals>
++                        <configuration>
++                            <outputDirectory>${project.build.directory}</outputDirectory>
++                            <overWriteReleases>false</overWriteReleases>
++                            <overWriteSnapshots>true</overWriteSnapshots>
++                        </configuration>
++                    </execution>
++                </executions>
++            </plugin>
++            <plugin>
++                <artifactId>maven-assembly-plugin</artifactId>
++                <executions>
++                    <execution>
++                        <phase>package</phase>
++                        <goals>
++                            <goal>single</goal>
++                        </goals>
++                    </execution>
++                </executions>
++                <configuration>
++                    <descriptorRefs>
++                        <descriptorRef>jar-with-dependencies</descriptorRef>
++                    </descriptorRefs>
++                </configuration>
++            </plugin>
+         </plugins>
+     </build>
+ 
+diff --git a/src/main/java/entity/ClassEntity.java b/src/main/java/entity/ClassEntity.java
+index 58c895c..4f97e3b 100644
+--- a/src/main/java/entity/ClassEntity.java
++++ b/src/main/java/entity/ClassEntity.java
+@@ -117,22 +117,27 @@ public class ClassEntity {
+ 
+     public String getRelativeFilePath() {
+         String filePath = path.toAbsolutePath().toString();
++        return filePath;
++        /*TODO
+         String[] splitString = filePath.split("\\\\");
+         StringBuilder stringBuilder = new StringBuilder();
+         for (int i = 0; i < 5; i++) {
+             stringBuilder.append(splitString[i] + "\\");
+         }
+         return filePath.substring(stringBuilder.toString().length()).replace("\\", "/");
++        */
+     }
+ 
+     public String getAppName() {
+         String filePath = path.toAbsolutePath().toString();
+-        return filePath.split("\\\\")[3];
++        //TODO return filePath.split("\\\\")[3];
++        return "appname";
+     }
+ 
+     public String getTagName() {
+         String filePath = path.toAbsolutePath().toString();
+-        return filePath.split("\\\\")[4];
++        //TODO return filePath.split("\\\\")[4];
++        return "tagname";
+     }
+ 
+     public ArrayList<String> getTechnicalDebtComments() {
