@@ -110,8 +110,11 @@ def extract_commits(repo_url, clean_up):
                       since=datetime(2021, 1, 1))
     
     print("Start commit analysis")
-    for commit in repo.traverse_commits(): # TODO: tags
+
+    for commit_hash in repo.get_tagged_commit(): # TODO: test
+        commit = repo.get_commit(commit_hash)
         commit_diff = dict()
+        
         for modified_file in commit.modified_files:
             #No added modifications
             if not modified_file.filename.endswith(".java") or not modified_file.diff_parsed['added']:
