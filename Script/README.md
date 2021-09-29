@@ -1,5 +1,7 @@
 # Group 1 - Replication in Java
 
+This project is used to store datasets, data collection, and data analysis scripts for group 1.
+
 ## List the available repositories
 
 We first tried to fetch a repository list by going through F-Droid
@@ -32,6 +34,11 @@ project: {
     }
 }
 ```
+
+root -> README2.md
+data -> repo_index.txt
+data_analysis -> extract.py
+data_collection -> filter_repos
 
 Also, we have run the provided tools on the repositories, but it will
 not be discussed there yet.
