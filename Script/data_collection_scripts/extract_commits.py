@@ -4,6 +4,7 @@ import subprocess
 import json
 import os
 import shutil
+import argparse
 from pydriller import Repository
 from datetime import datetime
 
@@ -58,7 +59,7 @@ def extract_commits(repo_url, clean_up):
     return project_info
 
 
-def extract_projects(clean_up = False):
+def extract_projects(repo_list_path, repo_folder_path, clean_up = False):
     '''
     Processes the projects.
     '''
@@ -78,7 +79,9 @@ def write_data():
     '''
     Writes extracted data to a file.
     '''
-    p = extract_projects(False)
+    repo_list_path = '../data/repo_index.txt'
+    repo_folder_path = '../data/repositories'
+    p = extract_projects(repo_list_path, repo_folder_path, False)
     file = 'data.json'
     os.remove(file)
 
