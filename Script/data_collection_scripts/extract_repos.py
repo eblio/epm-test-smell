@@ -86,13 +86,15 @@ def extract_repos_informations():
     gitlab_api = Gitlab('https://gitlab.com', private_token=args.gitlab_token)
     gitlab_api.auth()
     csv_exists = os.path.isfile(args.out)
+    is_first_project = True
     with open(args.repos_list_path, 'r') as f:
-        for i,url in enumerate(f.readlines()):
+        for url in f.readlines():
             logging.info('Extracting informations for {}'.format(url[:-1]))
             try:
                 info = extract_repo_informations(url, github_api, gitlab_api)
                 if info['url']:
-                    append_to_csv(args.out,info, i == 0 and not csv_exists)
+                    append_to_csv(args.out,info, is_first_project and not csv_exists)
+                    is_first_project = False
             except:
                 logging.error('Error extracting informations for {}'.format(url[:-1]))
 
