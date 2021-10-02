@@ -1,9 +1,0 @@
-https://github.com/PyGithub/PyGithub
-https://github.com/00-Evan/shattered-pixel-dungeon
-https://github.com/0ranko0P/AutoDark
-https://github.com/0xbb/otp-authenticator
-https://gitlab.com/thgoebel/spartathlon/tree/HEAD
-https://gitlab.com/tiwa42/personal-log
-https://gitlab.com/tjkemc2/openFNDDS
-https://gitlab.com/tmendes/BirthDayDroid
-https://git.zx2c4.com/wireguard-android/
