@@ -3,6 +3,7 @@ import csv
 import re
 import os
 import logging
+import time
 from dateutil import parser
 from github import Github
 from gitlab import Gitlab
@@ -58,16 +59,16 @@ def set_gitlab_info(info, gitlab_api, project_name):
     info['last_commit_date'] = date_to_str(parser.parse(commits[0].created_at))
 
 def set_github_info(info, github_api, project_name):
-        repo = github_api.get_repo(project_name)
-        info['url'] = repo.clone_url
-        info['open_issues'] = len(list(repo.get_issues(state='open')))
-        info['stars'] = repo.stargazers_count
-        info['name'] = repo.name
-        info['forks_count'] = repo.forks_count
-        commits = repo.get_commits()
-        info['commits_count'] = commits.totalCount
-        info['created_at'] = date_to_str(repo.created_at)
-        info['last_commit_date'] = date_to_str(commits[0].commit.author.date)
+    repo = github_api.get_repo(project_name)
+    info['url'] = repo.clone_url
+    info['open_issues'] = len(list(repo.get_issues(state='open')))
+    info['stars'] = repo.stargazers_count
+    info['name'] = repo.name
+    info['forks_count'] = repo.forks_count
+    commits = repo.get_commits()
+    info['commits_count'] = commits.totalCount
+    info['created_at'] = date_to_str(repo.created_at)
+    info['last_commit_date'] = date_to_str(commits[0].commit.author.date)
 
 
 def extract_repo_informations(url, github_api, gitlab_api):
