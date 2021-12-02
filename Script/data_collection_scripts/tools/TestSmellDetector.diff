@@ -1,0 +1,55 @@
+diff --git a/src/main/kotlin/detection/Detection.kt b/src/main/kotlin/detection/Detection.kt
+index 3986869..97daa36 100644
+--- a/src/main/kotlin/detection/Detection.kt
++++ b/src/main/kotlin/detection/Detection.kt
+@@ -15,7 +15,7 @@ class Detection(private val project: String,
+     /**
+      * Analyze a given pair and return a DetectionResult
+      */
+-    fun detectSmells(getSmellValue: (AbstractSmell) -> Any): DetectionResult {
++    fun detectSmells(getSmellValue: (Any?) -> Any): DetectionResult {
+         val testFile = TestFile(project, testClassPath, productionClassPath)
+         val tempFile: TestFile = testSmellDetector.detectSmells(testFile)
+ 
+diff --git a/src/main/kotlin/testsmell/Runner.kt b/src/main/kotlin/testsmell/Runner.kt
+index a024f5f..65ee0ff 100644
+--- a/src/main/kotlin/testsmell/Runner.kt
++++ b/src/main/kotlin/testsmell/Runner.kt
+@@ -25,11 +25,16 @@ class DetectorRunner : CliktCommand() {
+ 
+     override fun run() {
+         val thresholdStrategy: Thresholds = if (thresholds == "default") DefaultThresholds() else SpadiniThresholds()
+-        val granularityFunction: ((AbstractSmell) -> Any) = {
+-            if (granularity == "boolean") {
+-                it.hasSmell()
+-            } else {
+-                it.numberOfSmellyTests
++        val granularityFunction: ((Any?) -> Any) = {
++            if(it is AbstractSmell){
++                if (granularity == "boolean") {
++                    it.hasSmell()
++                } else {
++                    it.numberOfSmellyTests
++                }
++            }
++            else{
++                "NA"
+             }
+         }
+ 
+@@ -43,8 +48,13 @@ class DetectorRunner : CliktCommand() {
+                         productionClassPath = input.productionPath,
+                         testSmellDetector = TestSmellDetector(thresholdStrategy)
+                 )
+-                val detectedSmell: DetectionResult = detection.detectSmells(granularityFunction)
+-                writer.writeResult(detectedSmell)
++                try{
++                    val detectedSmell: DetectionResult = detection.detectSmells(granularityFunction)
++                    writer.writeResult(detectedSmell)
++                }
++                catch (e: Exception){
++                    println("Error during smell detection" + input.application + ", " + input.testPath)
++                }
+             }
+         } ?: println("No input file specified")
+     }
