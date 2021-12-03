@@ -78,7 +78,7 @@ def get_relevant_commits(repo_info):
     wd = os.getcwd()
     os.chdir(repo_info['path'])
     commits_info = dict()
-    commits = subprocess.run(['git', 'log', '--all', '--pretty=%H,%at,%ct,%an,%cn,%f'],capture_output=True).stdout.decode().strip().split('\n')
+    commits = subprocess.run(['git', 'log', '--all', '--pretty=%H,%at,%ct,%an,%cn,%f,%ce,%ae'],capture_output=True).stdout.decode().strip().split('\n')
     for commit in commits:
         fields = commit.split(',')
         if fields[0]  in commits_info:
@@ -87,7 +87,9 @@ def get_relevant_commits(repo_info):
                                     'commiter_timestamp':fields[2],
                                     'author':fields[3],
                                     'commiter':fields[4],
-                                    'subject':fields[5]}
+                                    'subject':fields[5],
+                                    'commiter_email':fields[6],
+                                    'author_email':fields[7]}
     os.chdir(wd)
     return commits_info
 
