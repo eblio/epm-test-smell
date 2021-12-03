@@ -18,8 +18,8 @@ def parse_arguments():
     subparsers = parser.add_subparsers()
     commitParser = subparsers.add_parser('commit')
     commitParser.add_argument('-i', '--repositories_csv', dest='input_csv', help='Repositories .csv from mine_repos.py')
-    commitParser.add_argument('-r', '--repositories_folder', dest='repositories_folder', help='Folder use to clone repositories')
     commitParser.add_argument('-t', '--tools_folder', dest='tools_folder', help='Folder containing all tools')
+    commitParser.add_argument('-c', '--commits_file', dest='commits_file', help='File containing all commit to process')
     commitParser.set_defaults(func=run_smells_history_analysis)
     return parser.parse_args()
 
@@ -48,7 +48,7 @@ def remove_csv_files():
                 os.remove(file)
 
 def clone_repository(repo_info, keep_history):
-    repo_info['path'] = os.path.join(args.repositories_folder, repo_info['name'])
+    repo_info['path'] = os.path.join('./', repo_info['name'])
     if not os.path.isdir(repo_info['path']):
         if keep_history:
             subprocess.run(["git","clone", repo_info['url'], repo_info['path']])
@@ -74,7 +74,7 @@ def detect_repository_tests_files(repo_info):
     return data
 
 
-def get_relevant_commits(repo_info):
+def get_relevant_commits(repo_info, commits_to_analyse):
     wd = os.getcwd()
     os.chdir(repo_info['path'])
     commits_info = dict()
@@ -82,6 +82,8 @@ def get_relevant_commits(repo_info):
     for commit in commits:
         fields = commit.split(',')
         if fields[0]  in commits_info:
+            continue
+        if fields[0] not in commits_to_analyse:
             continue
         commits_info[fields[0]] = { 'author_timestamp':fields[1],
                                     'commiter_timestamp':fields[2],
@@ -104,7 +106,9 @@ def analyse_commit(repo_info,commit_hash, commit_info, wd):
                             'author_timestamp':commit_info['author_timestamp'],
                             'commiter_timestamp':commit_info['commiter_timestamp'],
                             'author':commit_info['author'],
+                            'author_email':commit_info['author_email'],
                             'commiter':commit_info['commiter'],
+                            'commiter_email':commit_info['commiter_email'],
                             'subject':commit_info['subject'],
                             'app':repo_info['name'],
                             'url':repo_info['url'],
@@ -137,13 +141,16 @@ def run_smells_history_analysis():
     wd = os.getcwd()
     commits_collection = get_database()['commits']
     repositories = pd.read_csv(args.input_csv)
+    commits_to_analyse = set()
+    with open(args.commits_file) as f:
+        [commits_to_analyse.add(l.strip()) for l in f.readlines()]
     for _, repo_info in repositories.iterrows():
         try:
             logging.info('{}: cloning'.format(repo_info['name']))
             clone_repository(repo_info, True)
 
             logging.info('{}: extracting relevant commits'.format(repo_info['name']))
-            commits_info = get_relevant_commits(repo_info)
+            commits_info = get_relevant_commits(repo_info, commits_to_analyse)
 
             logging.info('{}: analysing {} commits'.format(repo_info['name'],len(commits_info)))
             for i,commit_hash in enumerate(commits_info):
@@ -157,6 +164,8 @@ def run_smells_history_analysis():
         except Exception:
             logging.error('{}: error during analysis'.format(repo_info['name']))
             traceback.print_exc()
+        #Analyse only the first project
+        break
 
 if __name__ == '__main__':
     args = parse_arguments()
