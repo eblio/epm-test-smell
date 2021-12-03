@@ -45,7 +45,10 @@ def remove_csv_files():
     for _, _, files in os.walk("."):
         for file in files:
             if regex.match(file):
-                os.remove(file)
+                try:
+                    os.remove(file)
+                except:
+                    pass
 
 def clone_repository(repo_info, keep_history):
     repo_info['path'] = os.path.join('./', repo_info['name'])
@@ -69,9 +72,12 @@ def detect_repository_tests_files(repo_info):
 
     smells_file = 'smells_{}_{}.csv'.format(repo_info['name'], commit_hash)
     subprocess.run(['java', '-jar', os.path.join(args.tools_folder,'TestSmellDetector.jar'), '-f', mapping_output_file, '-g', 'numerical', '-o', smells_file])
-    data = pd.read_csv(smells_file)
+    if os.path.isfile(smells_file):
+        data = pd.read_csv(smells_file)
+        remove_csv_files()
+        return data
     remove_csv_files()
-    return data
+    return None
 
 
 def get_relevant_commits(repo_info, commits_to_analyse):
@@ -101,7 +107,9 @@ def analyse_commit(repo_info,commit_hash, commit_info, wd):
     subprocess.run(['git', 'checkout', commit_hash])
     os.chdir(wd)
     test_smells_report = detect_repository_tests_files(repo_info)
-    json_report = json.loads(test_smells_report.to_json(orient='records'))
+    json_report = []
+    if test_smells_report is not None:
+        json_report = json.loads(test_smells_report.to_json(orient='records'))
     return {'hash':commit_hash,
                             'author_timestamp':commit_info['author_timestamp'],
                             'commiter_timestamp':commit_info['commiter_timestamp'],

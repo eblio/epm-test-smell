@@ -27,7 +27,7 @@ def format_user(author):
     return {
         'github_id':author.id,
         'node_id':author.node_id,
-        'contributions':author.contributions,
+        #'contributions':author.contributions,
         'created_at':date_to_str(author.created_at),
         'updated_at':date_to_str(author.updated_at),
         'email':author.email,
@@ -42,8 +42,8 @@ def format_user(author):
 
 if __name__ == '__main__':
     args = parse_arguments()
-    # github_api = Github(args.github_token)
-    github_api = Github()
+    github_api = Github(args.github_token)
+    #github_api = Github()
     project_name_pattern = '(?<=^https:\/\/github.com\/)[^\/]+\/[^\/\n\.]+'
     commits_collection = get_database()['commits']
     users_collection = get_database()['users']
@@ -70,13 +70,19 @@ if __name__ == '__main__':
     repos = dict()
     for author_info in authors_info:
         url = author_info['url']
-        print(author_info)
+        logging.info(author_info)
         #Get repo informations if needed
         if(not url in repos):
             repo_name =  re.search(project_name_pattern,url.lower(), re.IGNORECASE)[0]
             repos[url] = github_api.get_repo(repo_name)
-        commit = repos[url].get_commit(sha=author_info['commit'])
-        author = commit.author
-        github_user = format_user(author)
-        commits_collection.update_many({'author':author_info['_id']['author'],'author_email':author_info['_id']['email']},
-                                       {'$set':{'user':github_user}})
+
+        try:
+            commit = repos[url].get_commit(sha=author_info['commit'])
+            author = commit.author
+            if author is None:
+                logging.error('No author found for commit {}'.format(author_info['commit']))
+                continue
+            github_user = format_user(author)
+            commits_collection.update_many({'author':author_info['_id']['author'],'author_email':author_info['_id']['email']},{'$set':{'user':github_user}})
+        except:
+            logging.error('No author found for commit {}'.format(author_info['commit']))
