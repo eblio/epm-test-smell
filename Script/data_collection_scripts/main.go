@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path"
 	"strings"
 	"sync"
-	"math/rand"
+	"time"
 )
 
 var threads = 12
@@ -104,14 +105,13 @@ func analyseRepositories(repositories []Repository) {
 		cmdGitLog.Dir = path.Join(dir, repositories[i].name)
 		cmdGitLog.Run()
 		commitsSha := strings.Split(outb.String(), "\n")
+		//Remove last empty line
+		commitsSha = commitsSha[:len(commitsSha)-1]
+		log.Print("Detecting  ", len(commitsSha), " commits")
 
 		//Shuffle slice for better distribution between threads
 		rand.Seed(time.Now().UnixNano())
 		rand.Shuffle(len(commitsSha), func(i, j int) { commitsSha[i], commitsSha[j] = commitsSha[j], commitsSha[i] })
-
-		//Remove last empty line
-		log.Print("Detecting  ", len(commitsSha), " commits")
-		commitsSha = commitsSha[:len(commitsSha)-1]
 		nCommitsByThread := len(commitsSha) / threads
 		log.Print("Generating commits list for ", repositories[i].name)
 		for j := 0; j < threads; j++ {
@@ -158,7 +158,7 @@ func analyseRepository(repository Repository, repoDir string) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			log.Print(fmt.Sprintf("Process #%d complete",i)
+			log.Print(fmt.Sprintf("Process #%d complete", i))
 		}(i)
 	}
 	wg.Wait()
