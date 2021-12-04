@@ -15,23 +15,12 @@ logging.basicConfig(filename='test_smells_detection.log', encoding='utf-8', leve
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Extract information related to test smells')
-    subparsers = parser.add_subparsers()
-    commitParser = subparsers.add_parser('commit')
-    commitParser.add_argument('-i', '--repositories_csv', dest='input_csv', help='Repositories .csv from mine_repos.py')
-    commitParser.add_argument('-t', '--tools_folder', dest='tools_folder', help='Folder containing all tools')
-    commitParser.add_argument('-c', '--commits_file', dest='commits_file', help='File containing all commit to process')
-    commitParser.set_defaults(func=run_smells_history_analysis)
+    parser.add_argument('-u', '--app_url', dest='app_url', help='App url')
+    parser.add_argument('-n', '--app_name', dest='app_name', help='App name')
+    parser.add_argument('-t', '--tools_folder', dest='tools_folder', help='Folder containing all tools')
+    parser.add_argument('-c', '--commits_file', dest='commits_file', help='File containing all commit to process')
+    parser.set_defaults(func=run_smells_history_analysis)
     return parser.parse_args()
-
-def get_all_files_by_pattern(regex, parent='.'):
-    regex = re.compile(regex)
-    files_with_pattern = []
-    for _, _, files in os.walk(parent):
-        for file in files:
-            if regex.match(file):
-                files_with_pattern.append(file)
-    return files_with_pattern
-
 
 def get_file_by_pattern(regex, parent='.'):
     regex = re.compile(regex)
@@ -148,33 +137,29 @@ def get_commit_diff(repo_info, commit_hash):
 def run_smells_history_analysis():
     wd = os.getcwd()
     commits_collection = get_database()['commits']
-    repositories = pd.read_csv(args.input_csv)
     commits_to_analyse = set()
     with open(args.commits_file) as f:
         [commits_to_analyse.add(l.strip()) for l in f.readlines()]
-    for _, repo_info in repositories.iterrows():
-        try:
-            logging.info('{}: cloning'.format(repo_info['name']))
-            clone_repository(repo_info, True)
+    repo_info = {
+        'name':args.app_name,
+        'url':args.app_url
+    }
+    logging.info('{}: cloning'.format(repo_info['name']))
+    clone_repository(repo_info, True)
 
-            logging.info('{}: extracting relevant commits'.format(repo_info['name']))
-            commits_info = get_relevant_commits(repo_info, commits_to_analyse)
+    logging.info('{}: extracting relevant commits'.format(repo_info['name']))
+    commits_info = get_relevant_commits(repo_info, commits_to_analyse)
 
-            logging.info('{}: analysing {} commits'.format(repo_info['name'],len(commits_info)))
-            for i,commit_hash in enumerate(commits_info):
-                logging.info('{}: commit #{}'.format(repo_info['name'],i))
-                if commits_collection.find({'hash':commit_hash, 'app':repo_info['name']}).count() > 0:
-                    logging.info('{}: skipping commit #{}'.format(repo_info['name'],i))
-                    continue
-                commit_report = analyse_commit(repo_info, commit_hash, commits_info[commit_hash], wd)
-                commit_report['diff'] = get_commit_diff(repo_info, commit_hash)
-                commits_collection.insert_one(commit_report)
-        except Exception:
-            logging.error('{}: error during analysis'.format(repo_info['name']))
-            traceback.print_exc()
-        #Analyse only the first project
-        break
+    logging.info('{}: analysing {} commits'.format(repo_info['name'],len(commits_info)))
+    for i,commit_hash in enumerate(commits_info):
+        logging.info('{}: commit #{}'.format(repo_info['name'],i))
+        if commits_collection.find({'hash':commit_hash, 'app':repo_info['name']}).count() > 0:
+            logging.info('{}: skipping commit #{}'.format(repo_info['name'],i))
+            continue
+        commit_report = analyse_commit(repo_info, commit_hash, commits_info[commit_hash], wd)
+        commit_report['diff'] = get_commit_diff(repo_info, commit_hash)
+        commits_collection.insert_one(commit_report)
 
 if __name__ == '__main__':
     args = parse_arguments()
-    args.func()
+    run_smells_history_analysis()
