@@ -12,9 +12,10 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"math/rand"
 )
 
-var threads = 6
+var threads = 12
 var commit_file = "commit_file"
 var toolsFolder string
 var scriptFile string
@@ -103,6 +104,11 @@ func analyseRepositories(repositories []Repository) {
 		cmdGitLog.Dir = path.Join(dir, repositories[i].name)
 		cmdGitLog.Run()
 		commitsSha := strings.Split(outb.String(), "\n")
+
+		//Shuffle slice for better distribution between threads
+		rand.Seed(time.Now().UnixNano())
+		rand.Shuffle(len(commitsSha), func(i, j int) { commitsSha[i], commitsSha[j] = commitsSha[j], commitsSha[i] })
+
 		//Remove last empty line
 		log.Print("Detecting  ", len(commitsSha), " commits")
 		commitsSha = commitsSha[:len(commitsSha)-1]
@@ -152,6 +158,7 @@ func analyseRepository(repository Repository, repoDir string) {
 			if err != nil {
 				log.Fatal(err)
 			}
+			log.Print(fmt.Sprintf("Process #%d complete",i)
 		}(i)
 	}
 	wg.Wait()
