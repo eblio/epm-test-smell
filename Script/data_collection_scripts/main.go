@@ -81,7 +81,10 @@ func analyseRepositories(repositories []Repository) {
 		defer os.RemoveAll(dir)
 		cmdClone := exec.Command("git", "clone", repositories[i].url, repositories[i].name)
 		cmdClone.Dir = dir
-		cmdClone.Run()
+		err = cmdClone.Run()
+		if err != nil {
+			log.Fatal(err)
+		}
 		log.Print("Create thread dirs for ", repositories[i].name)
 		for j := 0; j < threads; j++ {
 			threadDir := fmt.Sprintf("%s%d", repositories[i].name, j)
@@ -150,12 +153,18 @@ func analyseRepository(repository Repository, repoDir string) {
 			if err != nil {
 				log.Fatal(err)
 			}
+			errfile, err := os.Create(path.Join(threadDirPath, "stderr.log"))
+			if err != nil {
+				log.Fatal(err)
+			}
 			defer outfile.Close()
 			cmdRunAnalysis := exec.Command("python3", scriptPath, "-u", repository.url, "-n", repository.name, "-t", toolPath, "-c", commit_file)
 			cmdRunAnalysis.Dir = threadDirPath
 			cmdRunAnalysis.Stdout = outfile
+			cmdRunAnalysis.Stderr = errfile
 			err = cmdRunAnalysis.Run()
 			if err != nil {
+				log.Print("Error during analysis process")
 				log.Fatal(err)
 			}
 			log.Print(fmt.Sprintf("Process #%d complete", i))

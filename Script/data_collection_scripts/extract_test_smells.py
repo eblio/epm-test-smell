@@ -73,7 +73,7 @@ def get_relevant_commits(repo_info, commits_to_analyse):
     wd = os.getcwd()
     os.chdir(repo_info['path'])
     commits_info = dict()
-    commits = subprocess.run(['git', 'log', '--all', '--pretty=%H,%at,%ct,%an,%cn,%f,%ce,%ae'],capture_output=True).stdout.decode().strip().split('\n')
+    commits = subprocess.run(['git', 'log', '--all', '--pretty=%H,%at,%ct,%an,%cn,%f,%ce,%ae'],capture_output=True).stdout.decode(errors="ignore").strip().split('\n')
     for commit in commits:
         fields = commit.split(',')
         if fields[0]  in commits_info:
@@ -120,7 +120,7 @@ def get_database():
     return client['epm-test-smell']
 
 
-def get_commit_diff(repo_info, commit_hash):
+def get_commit_diff(repo_info, commit_hash, includeLines):
     for commit in Repository(repo_info['path'], single=commit_hash).traverse_commits():
         commit_diff = dict()
         for modified_file in commit.modified_files:
@@ -128,7 +128,10 @@ def get_commit_diff(repo_info, commit_hash):
                 continue
 
             #Store file modfications
-            commit_diff[modified_file.filename] = modified_file.diff_parsed
+            if includeLines:
+                commit_diff[modified_file.filename] = modified_file.diff_parsed
+            else:
+                commit_diff[modified_file.filename] = None
         #Store commit modifications
         return commit_diff
 
@@ -153,12 +156,17 @@ def run_smells_history_analysis():
     logging.info('{}: analysing {} commits'.format(repo_info['name'],len(commits_info)))
     for i,commit_hash in enumerate(commits_info):
         logging.info('{}: commit #{}'.format(repo_info['name'],i))
-        if commits_collection.find({'hash':commit_hash, 'app':repo_info['name']}).count() > 0:
+        if commits_collection.count_documents({'hash':commit_hash, 'app':repo_info['name']}) > 0:
             logging.info('{}: skipping commit #{}'.format(repo_info['name'],i))
             continue
         commit_report = analyse_commit(repo_info, commit_hash, commits_info[commit_hash], wd)
-        commit_report['diff'] = get_commit_diff(repo_info, commit_hash)
-        commits_collection.insert_one(commit_report)
+        commit_report['diff'] = get_commit_diff(repo_info, commit_hash, True)
+        try:
+            commits_collection.insert_one(commit_report)
+        except:
+            commit_report['diff'] = get_commit_diff(repo_info, commit_hash, False)
+            commits_collection.insert_one(commit_report)
+
 
 if __name__ == '__main__':
     args = parse_arguments()
