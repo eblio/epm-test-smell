@@ -3,6 +3,7 @@ Utility functions.
 '''
 
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 def set_plot_size(w, h, ax=None):
     '''
@@ -21,3 +22,9 @@ def set_plot_size(w, h, ax=None):
     figh = float(h)/(t-b)
 
     ax.figure.set_size_inches(figw, figh)
+
+def string_to_date(date_string):
+    '''
+    Transforms a string to a datetime object.
+    '''
+    return datetime.strptime(date_string, '%Y-%m-%d %H:%M:%S')
