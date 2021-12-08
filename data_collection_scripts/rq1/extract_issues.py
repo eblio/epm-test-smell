@@ -90,12 +90,11 @@ def get_repo_list_issues(file, token, start_name):
 
             print('Its sleep time ! For : {}s'.format(sleep_time))
 
-            # Sleep until our nulber of request gets restored
+            # Sleep until our number of request gets restored
             time.sleep(sleep_time)
             g = Github(token)
 
-import os
+
 if __name__ == '__main__':
-    # args = parse_args()
-    # get_repo_list_issues(args.file, args.token, args.name)
-    print(len(os.listdir('../../data/rq1/android_issues')))
+    args = parse_args()
+    get_repo_list_issues(args.file, args.token, args.name)
