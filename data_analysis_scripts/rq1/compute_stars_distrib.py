@@ -7,7 +7,7 @@ import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
 
-OUT_FILE = '../../data/rq1/stars_distrib.pdf'
+OUT_FILE = '../../data/rq1/figures/stars_distrib.pdf'
 
 def parse_args():
     '''
@@ -42,7 +42,7 @@ def draw_distribs(stars, log_stars):
     a2.set_axisbelow(True)
     a2.grid()
     # a2.set_title('Histogram of the logarithm of the number stars')
-    a2.set(xlabel='$log_{10}(10 + stars)$', ylabel='$projects$')
+    a2.set(xlabel='$log_{10}(1 + stars)$', ylabel='$projects$')
     a2.hist(log_stars, color='#E03015')
     a2.set_box_aspect(1)
 
