@@ -133,6 +133,7 @@ def draw_curves(repo_time, repo_prob, all_time, all_prob):
     plt.subplots_adjust(wspace=0.3)
     # plt.show()
     plt.savefig(OUT_FILE, format='pdf', bbox_inches='tight')
+    
 
 def plot_one_repo_and_all():
     '''
