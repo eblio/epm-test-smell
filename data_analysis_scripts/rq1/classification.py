@@ -4,6 +4,7 @@ Classify our repositories into two groups.
 
 import os
 import json
+import utils
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,20 +12,7 @@ from sksurv.functions import StepFunction
 
 ISSUES_PATH = '../../data/rq1/android_issues/'
 STARS_FILE = '../../data/rq1/repos_stars.csv'
-
-def name_to_filename(name):
-    '''
-    Transforms a repository name into a filename.
-    '''
-    return name.replace('/', '_') + '.json'
-
-
-def filename_to_name(filename):
-    '''
-    Transforms a filename to a repository name.
-    '''
-    return filename.replace('_', '/')[:-5] # Remove the .json extension
-
+OUT_FILE = '../../data/rq1/figures/km_distrib.pdf'
 
 def get_quantile_indices(a, q):
     '''
@@ -64,20 +52,20 @@ def draw_distribs(days, year):
     a1.set_axisbelow(True)
     a1.grid()
     # a1.set_title('Histogram of the number of stars')
-    a1.set(xlabel='prob. of 3 days surv.', ylabel='$projects$')
+    a1.set(xlabel='prob. of 3 days surv.', ylabel='projects')
     a1.hist(days, color='#E03015')
     a1.set_box_aspect(1)
 
     a2.set_axisbelow(True)
     a2.grid()
     # a2.set_title('Histogram of the logarithm of the number stars')
-    a2.set(xlabel='prob. of 365 days surv.', ylabel='$projects$')
+    a2.set(xlabel='prob. of 365 days surv.', ylabel='projects')
     a2.hist(year, color='#E03015')
     a2.set_box_aspect(1)
 
     plt.subplots_adjust(wspace=0.3)
     # plt.show()
-    # plt.savefig(OUT_FILE, format='pdf', bbox_inches='tight')
+    plt.savefig(OUT_FILE, format='pdf', bbox_inches='tight')
 
 
 def get_survival_prob(issues):
@@ -107,11 +95,11 @@ def get_issues_classes():
     for filename in os.listdir(ISSUES_PATH):
         with open(ISSUES_PATH + filename, 'r') as f:
             data = json.load(f)
-            name = filename_to_name(filename)
+            name = utils.filename_to_name(filename)
             days, year = get_survival_prob(data)
 
             if days != None and year != None:
-                issues['name'].append(filename_to_name(filename))
+                issues['name'].append(utils.filename_to_name(filename))
                 issues['days'].append(days)
                 issues['year'].append(year)
 
