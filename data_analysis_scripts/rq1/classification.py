@@ -13,6 +13,14 @@ from sksurv.functions import StepFunction
 ISSUES_PATH = '../../data/rq1/android_issues/'
 STARS_FILE = '../../data/rq1/repos_stars.csv'
 OUT_FILE = '../../data/rq1/figures/km_distrib.pdf'
+OUT_PATH = '../../data/rq1/groups/'
+CSV_HEADER = 'name\n'
+FILE_NAMES = [
+    'bad_quality_stars.csv',
+    'good_quality_stars.csv',
+    'bad_quality_issues.csv',
+    'good_quality_issues.csv'
+]
 
 def get_quantile_indices(a, q):
     '''
@@ -77,7 +85,7 @@ def get_survival_prob(issues):
     year = None
 
     try:
-        days = f(3)
+        days = f(30)
         year = f(365)
     except:
         pass # The dataset might not reach our necessary boundaries
@@ -127,12 +135,32 @@ def get_classes():
     low_stars, high_stars = get_stars_classes()
     low_days, high_days, low_year, high_year = get_issues_classes()
 
-    low_quality = set(low_stars).intersection(set(low_days), set(low_year))
-    high_quality = set(high_stars).intersection(set(high_days), set(high_year))
+    good_surv = set(high_days).intersection(set(high_year))
+    bad_surv = set(low_days).intersection(set(low_year))
 
-    print(len(low_stars), len(low_days), len(low_year), len(low_quality))
-    print(len(high_stars), len(high_days), len(high_year), len(high_quality))
+    print('{} projects with high quality issue survival'.format(len(good_surv)))
+    print('{} projects with low quality issue survival'.format(len(bad_surv)))
+    print('{} projects with high number of stars'.format(len(high_stars)))
+    print('{} projects with low number of stars'.format(len(low_stars)))
+
+    return low_stars, high_stars, bad_surv, good_surv # Important order
+
+
+def output_classes():
+    '''
+    Ouputs the generated classes into .csv files.
+    '''
+    groups = get_classes()
+
+    for i in range(len(groups)):
+        file_content = CSV_HEADER
+        
+        for name in groups[i]:
+            file_content += name + '\n'
+
+        with open(OUT_PATH + FILE_NAMES[i], 'w') as f:
+            f.write(file_content)
 
 
 if __name__ == '__main__':
-    get_classes()
+    output_classes()
