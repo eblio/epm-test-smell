@@ -1,0 +1,211 @@
+diff --git a/TestFileMapping.iml b/TestFileMapping.iml
+index d74c08b..00bc012 100644
+--- a/TestFileMapping.iml
++++ b/TestFileMapping.iml
+@@ -5,8 +5,6 @@
+     <output-test url="file://$MODULE_DIR$/target/test-classes" />
+     <content url="file://$MODULE_DIR$">
+       <sourceFolder url="file://$MODULE_DIR$/src/main/java" isTestSource="false" />
+-      <sourceFolder url="file://$MODULE_DIR$/src/main/resources" type="java-resource" />
+-      <sourceFolder url="file://$MODULE_DIR$/src/test/java" isTestSource="true" />
+       <excludeFolder url="file://$MODULE_DIR$/target" />
+     </content>
+     <orderEntry type="inheritedJdk" />
+diff --git a/pom.xml b/pom.xml
+index 218dc31..d4fb7e7 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -10,6 +10,17 @@
+ 
+     <build>
+         <plugins>
++            <plugin>
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-assembly-plugin</artifactId>
++                <configuration>
++                    <archive>
++                        <manifest>
++                            <mainClass>edu.rit.se.testsmells.Main</mainClass>
++                        </manifest>
++                    </archive>
++                </configuration>
++            </plugin>
+             <plugin>
+                 <groupId>org.apache.maven.plugins</groupId>
+                 <artifactId>maven-compiler-plugin</artifactId>
+@@ -18,6 +29,52 @@
+                     <target>1.8</target>
+                 </configuration>
+             </plugin>
++            <plugin>
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-jar-plugin</artifactId>
++                <configuration>
++                    <archive>
++                        <manifestFile>src/resources/META-INF/MANIFEST.MF</manifestFile>
++                    </archive>
++                </configuration>
++            </plugin>
++
++            <plugin>
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-dependency-plugin</artifactId>
++                <executions>
++                    <execution>
++                        <id>copy-dependencies</id>
++                        <phase>package</phase>
++                        <goals>
++                            <goal>copy-dependencies</goal>
++                        </goals>
++                        <configuration>
++                            <outputDirectory>${project.build.directory}</outputDirectory>
++                            <overWriteReleases>false</overWriteReleases>
++                            <overWriteSnapshots>true</overWriteSnapshots>
++                        </configuration>
++                    </execution>
++                </executions>
++            </plugin>
++            <plugin>
++                <artifactId>maven-assembly-plugin</artifactId>
++                <executions>
++                    <execution>
++                        <phase>package</phase>
++                        <goals>
++                            <goal>single</goal>
++                        </goals>
++                    </execution>
++                </executions>
++                <configuration>
++                    <descriptorRefs>
++                        <descriptorRef>jar-with-dependencies</descriptorRef>
++                    </descriptorRefs>
++                </configuration>
++            </plugin>
++
++
+         </plugins>
+     </build>
+ 
+@@ -41,5 +98,5 @@
+ 
+     </dependencies>
+ 
+-    
+-</project>
+\ No newline at end of file
++
++</project>
+diff --git a/src/main/java/edu/rit/se/testsmells/Main.java b/src/main/java/edu/rit/se/testsmells/Main.java
+index cf57c94..7167fd4 100644
+--- a/src/main/java/edu/rit/se/testsmells/Main.java
++++ b/src/main/java/edu/rit/se/testsmells/Main.java
+@@ -23,6 +23,8 @@ public class Main {
+                 return;
+             }
+         }
++        String appName = args[1];
++        String tag = args[2];
+ 
+ 
+         System.out.println("Started!");
+@@ -54,8 +56,8 @@ public class Main {
+ 
+         for (int i = 0; i < testFiles.size(); i++) {
+             columnValues = new ArrayList<>();
+-            columnValues.add(0,testFiles.get(i).getAppName());
+-            columnValues.add(1,testFiles.get(i).getTagName());
++            columnValues.add(0,appName);
++            columnValues.add(1,tag);
+             columnValues.add(2,testFiles.get(i).getFilePath());
+             columnValues.add(3,testFiles.get(i).getProductionFilePath());
+             columnValues.add(4,testFiles.get(i).getRelativeTestFilePath());
+diff --git a/src/main/java/edu/rit/se/testsmells/MappingDetector.java b/src/main/java/edu/rit/se/testsmells/MappingDetector.java
+index c62d5d5..423c45b 100644
+--- a/src/main/java/edu/rit/se/testsmells/MappingDetector.java
++++ b/src/main/java/edu/rit/se/testsmells/MappingDetector.java
+@@ -106,4 +106,3 @@ public class MappingDetector {
+     }
+ 
+ }
+-
+diff --git a/src/main/java/edu/rit/se/testsmells/TestFile.java b/src/main/java/edu/rit/se/testsmells/TestFile.java
+index 6c28398..c8ed58a 100644
+--- a/src/main/java/edu/rit/se/testsmells/TestFile.java
++++ b/src/main/java/edu/rit/se/testsmells/TestFile.java
+@@ -24,46 +24,53 @@ public class TestFile {
+ 
+     public String getProjectRootFolder() {
+         StringBuilder stringBuilder = new StringBuilder();
+-        for (int i = 0; i < 5; i++) {
+-            stringBuilder.append(data[i] + "\\");
++        for (String datum : data) {
++            stringBuilder.append(datum).append("/");
++            if (datum.equals("repo"))
++                break;
+         }
+         return stringBuilder.toString();
+     }
+ 
+     public String getAppName() {
+-        return data[3];
++        for (int i = 0; i < data.length; i++) {
++            if(data[i].equals("repo"))
++                return data[i+1];
++        }
++        return "";
+     }
+ 
+     public String getTagName() {
+-        return data[4];
++        return "";
+     }
+ 
+     public TestFile(String filePath) {
+         this.filePath = filePath;
+-        data = filePath.split("\\\\");
++        data = filePath.split("/");
+     }
+ 
+     public String getRelativeTestFilePath(){
+-        String[] splitString = filePath.split("\\\\");
+-        StringBuilder stringBuilder = new StringBuilder();
+-        for (int i = 0; i < 5; i++) {
+-            stringBuilder.append(splitString[i] + "\\");
+-        }
+-        return filePath.substring(stringBuilder.toString().length()).replace("\\","/");
++        return this.filePath;
++        // String[] splitString = filePath.split("\\\\");
++        // StringBuilder stringBuilder = new StringBuilder();
++        // for (int i = 0; i < 5; i++) {
++        //     stringBuilder.append(splitString[i] + "\\");
++        // }
++        // return filePath.substring(stringBuilder.toString().length()).replace("\\","/");
+     }
+ 
+     public String getRelativeProductionFilePath(){
+-        if (!StringUtils.isEmpty(productionFilePath)){
+-            String[] splitString = productionFilePath.split("\\\\");
+-            StringBuilder stringBuilder = new StringBuilder();
+-            for (int i = 0; i < 5; i++) {
+-                stringBuilder.append(splitString[i] + "\\");
+-            }
+-            return productionFilePath.substring(stringBuilder.toString().length()).replace("\\","/");
+-        }
+-        else{
+-            return "";
+-        }
+-
++        return productionFilePath;
++        // if (!StringUtils.isEmpty(productionFilePath)){
++        //     String[] splitString = productionFilePath.split("\\\\");
++        //     StringBuilder stringBuilder = new StringBuilder();
++        //     for (int i = 0; i < 5; i++) {
++        //         stringBuilder.append(splitString[i] + "\\");
++        //     }
++        //     return productionFilePath.substring(stringBuilder.toString().length()).replace("\\","/");
++        // }
++        // else{
++        //     return "";
++        // }
+     }
+ }
