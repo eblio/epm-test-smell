@@ -52,7 +52,8 @@ if __name__ == '__main__':
             '$match': {
                 'user': {
                     '$exists': 0
-                }
+                },
+                'url':{'$regex':'github','$options':'i'}
             }
         },
         {
