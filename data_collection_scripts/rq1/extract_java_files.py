@@ -2,6 +2,7 @@
 Extracts the number of Java files in a project.
 '''
 
+import utils
 import time
 import argparse
 import pandas as pd
@@ -39,7 +40,7 @@ def get_main_branch_sha(r):
     for branch in r.get_branches():
         sha = branch.commit.sha
 
-        if branch.name == 'main' or branch.name == 'master':
+        if branch.name == r.default_branch:
             break
 
     return sha
@@ -50,7 +51,7 @@ def get_number_of_java_files(r):
     Gets the relevant information from an issue object.
     '''
     java_files = 0
-
+    
     for f in r.get_git_tree(get_main_branch_sha(r), recursive=True).tree:
         if is_a_java_file(f.path):
             java_files += 1
@@ -104,12 +105,29 @@ def get_repo_list_java_files(file, token, start_name):
                 # Sleep until our number of request gets restored
                 time.sleep(sleep_time)
                 g = Github(token)
-    except:
-        pass
+    except Exception as e:
+        print(e)
 
     output_file.to_csv(OUT_FILE, index=False)
 
 
+def add_test_files():
+    '''
+    Adds the number of tests files to the previously gathered number of java files.
+    '''
+    output_file = pd.read_csv(OUT_FILE)
+    test_files = []
+
+    for name in output_file['name']:
+        filename = utils.project_name_to_file_name(utils.name_to_project_name(name))
+        input_file = pd.read_csv(filename)
+        test_files.append(len(input_file['App']))
+
+    output_file = output_file.assign(test_files=pd.Series(test_files).values)
+    output_file.to_csv(OUT_FILE + '.out', index=False)
+
+
 if __name__ == '__main__':
-    args = parse_args()
-    get_repo_list_java_files(args.file, args.token, args.name)
+    add_test_files()
+    # args = parse_args()
+    # get_repo_list_java_files(args.file, args.token, args.name)

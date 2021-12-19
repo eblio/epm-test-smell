@@ -2,15 +2,13 @@
 This file draw smells distribution for various groups.
 '''
 
-import glob
+import utils
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
 OUT_FORMAT = '../../data/rq1/figures/{}_vs_{}.pdf'
 GROUPS_PATH = '../../data/rq1/groups/'
-SMELL_PATH = '../../data/rq1/android_test_smells/'
-NAME_FORMAT = '*_{}_*.csv'
 SMELLS_NAME = [
     'Assertion Roulette', 
     'Conditional Test Logic', 
@@ -39,20 +37,6 @@ DEFAULT_DICT = {}
 for n in SMELLS_NAME:
     DEFAULT_DICT[n] = 0
 
-def name_to_project_name(name):
-    '''
-    Gets the project name based on the repository name (user/project).
-    '''
-    return name.split("/", 1)[1].replace('/', '_')
-
-
-def project_name_to_file_name(name):
-    '''
-    Gets the file corresponding to a certain project name.
-    '''
-    return glob.glob(SMELL_PATH + NAME_FORMAT.format(name))[0]
-
-
 def column_to_sum(col):
     '''
     Converts a column indicating smell presence to an int.
@@ -75,7 +59,7 @@ def get_smell_distrib(names):
 
     # Compute occurences
     for n in names:
-        filename = project_name_to_file_name(name_to_project_name(n))
+        filename = utils.project_name_to_file_name(utils.name_to_project_name(n))
         data = pd.read_csv(filename)
 
         # Iterate over the smells and compute the sum
