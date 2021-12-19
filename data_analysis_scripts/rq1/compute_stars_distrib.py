@@ -35,14 +35,14 @@ def draw_distribs(stars, log_stars):
     a1.set_axisbelow(True)
     a1.grid()
     # a1.set_title('Histogram of the number of stars')
-    a1.set(xlabel='$stars$', ylabel='$projects$')
+    a1.set(xlabel='stars', ylabel='projects')
     a1.hist(stars, color='#E03015', log=True)
     a1.set_box_aspect(1)
 
     a2.set_axisbelow(True)
     a2.grid()
     # a2.set_title('Histogram of the logarithm of the number stars')
-    a2.set(xlabel='$log_{10}(1 + stars)$', ylabel='$projects$')
+    a2.set(xlabel='$log_{10}(1 + stars)$', ylabel='projects')
     a2.hist(log_stars, color='#E03015')
     a2.set_box_aspect(1)
 

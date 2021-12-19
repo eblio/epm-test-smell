@@ -28,7 +28,7 @@ def name_to_filename(name):
     '''
     Converts a repository name to a JSON file name.
     '''
-    return name.replace('/', '-') + '.json' # Transformation asymétrique
+    return name.replace('/', '_') + '.json' # Transformation asymétrique
 
 
 def get_issue_data(i):

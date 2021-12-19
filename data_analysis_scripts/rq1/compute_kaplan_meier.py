@@ -6,9 +6,13 @@ import os
 import json
 import utils
 import argparse
+import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from sksurv.nonparametric import kaplan_meier_estimator
+from sksurv.functions import StepFunction
+from sklearn.decomposition import PCA
 
 ISSUES_PATH = '../../data/rq1/android_issues/'
 OUT_FILE = '../../data/rq1/figures/km_curves.pdf'
@@ -120,19 +124,20 @@ def draw_curves(repo_time, repo_prob, all_time, all_prob):
 
     a1.set_axisbelow(True)
     a1.grid()
-    a1.set(xlabel='$time [days]$', ylabel='$survival probability$', ylim=(0, 1))
-    a1.step(repo_time, repo_prob, where='post', color='#E03015')
+    a1.set(xlabel='time [days]', ylabel='survival probability', ylim=(0, 1))
+    a1.step(repo_time, repo_prob, where='post', color='#0F0F0F')
     a1.set_box_aspect(1)
 
     a2.set_axisbelow(True)
     a2.grid()
-    a2.set(xlabel='$time [days]$', ylabel='$survival probability$', ylim=(0, 1))
-    a2.step(all_time, all_prob, where='post', color='#E03015')
+    a2.set(xlabel='time [days]', ylabel='survival probability', ylim=(0, 1))
+    a2.step(all_time, all_prob, where='post', color='#0F0F0F')
     a2.set_box_aspect(1)
 
     plt.subplots_adjust(wspace=0.3)
     # plt.show()
     plt.savefig(OUT_FILE, format='pdf', bbox_inches='tight')
+    
 
 def plot_one_repo_and_all():
     '''
@@ -140,7 +145,7 @@ def plot_one_repo_and_all():
     '''
 
     # Get repo data
-    repo = 'xbmc-xbmc.json'
+    repo = 'xbmc_xbmc.json'
     repo_data = {}
 
     with open(ISSUES_PATH + repo, 'r') as f:
@@ -169,6 +174,59 @@ def plot_one_repo_and_all():
     draw_curves(repo_time, repo_prob, all_time, all_prob)
 
 
+def get_survival_prob(issues):
+    '''
+    Gets the survival probabilities based on the issue object.
+    '''
+    f = StepFunction(np.array(issues['time']), np.array(issues['prob_survival']))
+    prob = None
+
+    try:
+        prob = {
+            '1 days': f(1),
+            '2 days':f(2),
+            '3 days': f(3),
+            '7 days': f(7),
+            '30 days': f(30),
+            '100 days': f(100),
+            '365 days': f(365)
+        }
+    except:
+        pass # The dataset might not reach our necessary boundaries
+
+    return prob
+
+
+def main_component_analysis():
+    '''
+    Performs a main component analysis on the Kaplan Meier analysis.
+    https://stackoverflow.com/questions/50796024/feature-variable-importance-after-a-pca-analysis
+    '''
+
+    prob_data = pd.DataFrame()
+
+    # Collect the data for the PCA
+    for filename in os.listdir(ISSUES_PATH):
+        with open(ISSUES_PATH + filename, 'r') as f:
+            data = json.load(f)
+            name = utils.filename_to_name(filename)
+            prob = get_survival_prob(data)
+
+            if prob != None:
+                prob_data = prob_data.append(prob, ignore_index=True)
+
+    # Compute the components variance
+    pca = PCA(n_components=7)
+    pca.fit_transform(prob_data)
+
+    print('Variance of each component : ' + str(pca.explained_variance_ratio_))
+
+    most_important = [np.abs(pca.components_[i]).argmax() for i in range(7)]
+    most_important_names = [prob_data.columns[most_important[i]] for i in range(7)]
+    
+    print('Importance of each : ' + str(most_important_names))
+
+
 if __name__ == '__main__':
     args = parse_args()
 
@@ -178,3 +236,5 @@ if __name__ == '__main__':
         compute_all_repo_issues_survival()
     elif args.mode == 'plot':
         plot_one_repo_and_all()
+    elif args.mode == 'main':
+        main_component_analysis()

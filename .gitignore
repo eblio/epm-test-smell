@@ -130,6 +130,7 @@ dmypy.json
 
 **/repo/*
 
+*/data/mongodb
 # Ignore data folder (consider only the ZIP file)
 **/android_test_smells/
 **/android_issues/
