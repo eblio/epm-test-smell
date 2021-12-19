@@ -1,0 +1,862 @@
+---
+title: "RQ2"
+output: html_notebook
+---
+
+# Requirements
+
+### Libraries
+```{r, message=F}
+library(tidyverse)
+library(cluster)
+library(mclust)
+library(gridExtra)
+library(mongolite)
+library(factoextra)
+library(gridExtra)
+library(fclust)
+library(stringr)
+library(flextable)
+```
+
+
+### Database connection
+```{r}
+connection_string <- 'mongodb://192.168.1.114:27018'
+collection_name <- "commits"
+database_name <- "epm-test-smell"
+commits_collection <- mongo(collection=collection_name, db=database_name, url=connection_string)
+```
+
+# Functions
+```{r}
+format_users <- function(data){
+  data %>% select(internal, external) %>% rename(Internal = internal, External = external) %>% gather(key = Metric, value= Expertise) %>%  group_by(Metric, Expertise) %>% summarise(count = n()) %>% mutate(Proportion = count/sum(count))
+}
+
+plot_users <- function(data){
+  format_users(data) %>% ggplot(aes(x=Metric, y=Proportion,fill = Expertise, label = scales::percent(Proportion))) + geom_bar(stat = 'identity',position = position_dodge()) +     geom_text(position = position_dodge(width = .9),vjust = -0.5, size = 3) +
+  scale_fill_grey(start = 0.5, end = 0.7, na.value = "red") +
+  theme_minimal() + theme(axis.title = element_text(), legend.position = "bottom")
+
+}
+
+plot_by_types <- function(data){
+ data %>% ggplot(aes(y = smells, x = percentage, fill=Expertise, label = scales::percent(percentage))) +
+  geom_bar(stat = "identity", position="dodge") +
+  geom_text(aes(label =scales::percent(percentage, accuracy = 0.1), hjust=+0.5), position = position_dodge(width = .8), size = 3) +
+  scale_fill_grey(start = 0.5, end = 0.7, na.value = "red") + labs(x ="Proportion", y = "Smell Type") + theme_minimal() + theme(axis.title = element_text(), legend.position = "bottom")
+}
+
+save_plot <- function(p,name=deparse(substitute(p)), width = 13, heigth = 11){
+ggsave(p, file=paste('images/',name,'.pdf' ,sep=''), device = "pdf", width = width, height = heigth, units = 'cm')
+}
+
+execute_test <- function(d1, d2){
+  fisher.test(t(rbind(table(d1), table(d2))))
+}
+```
+
+# RQ2 What is the impact of developper expertise on test smells
+
+## Summary
+
+```{r}
+#Get total github users count
+total_users <- commits_collection$aggregate('
+[
+  {
+    "$match":{
+      "url":{
+        "$regex":"github",
+        "$options":"i"
+      }
+    }
+  },
+  {
+      "$set": {
+          "users": {
+              "$objectToArray": "$users"
+          }
+      }
+  }, 
+  {
+    "$group":{
+      "_id":"$users.v.github_id"
+    }
+  },
+  {
+    "$count":"Github users"
+  }
+]
+')
+
+#Get total project count
+total_projects <- commits_collection$aggregate('
+[
+  {
+    "$match":{
+      "url":{
+        "$regex":"github",
+        "$options":"i"
+      }
+    }
+  },
+  {
+    "$group":{
+      "_id":"$app"
+    }
+  },
+  {
+    "$count":"Projects"
+  }
+]
+')
+
+total_commits <- commits_collection$aggregate('
+[
+  {
+    "$match":{
+      "url":{
+        "$regex":"github",
+        "$options":"i"
+      }
+    }
+  },
+  {
+    "$count":"Commits"
+  }
+]
+')
+
+totals <- cbind(total_projects, total_commits, total_users) 
+
+```
+
+```{r}
+flextable(totals) %>% colformat_int(big.mark = ' ') %>% autofit()
+
+```
+
+## Clustering
+
+### Data preparation
+```{r}
+#Get all users
+users <- commits_collection$aggregate('
+  [
+    {
+        "$set": {
+            "users": {
+                "$objectToArray": "$users"
+            }
+        }
+    }, {
+        "$unwind": "$users"
+    }, {
+        "$match": {
+            "users.v.type": "User"
+        }
+    }, {
+        "$group": {
+            "_id": "$users.v.github_id", 
+            "nCommits": {
+                "$sum": 1
+            }, 
+            "nCommitsAuthor": {
+                "$sum": {
+                    "$cond": [
+                        {
+                            "$eq": [
+                                "$users.k", "author"
+                            ]
+                        }, 1, 0
+                    ]
+                }
+            }, 
+            "nCommitsCommitter": {
+                "$sum": {
+                    "$cond": [
+                        {
+                            "$eq": [
+                                "$users.k", "committer"
+                            ]
+                        }, 1, 0
+                    ]
+                }
+            }, 
+            "user": {
+                "$last": "$users.v"
+            }
+        }
+    }, {
+        "$project": {
+            "user.github_id": 0
+        }
+    }, {
+        "$sort": {
+            "nCommits": -1
+        }
+    }
+]
+')
+
+users <- do.call(cbind,users)
+#Remove application user
+users <- users %>% filter(user.login != 'web-flow' & user.login != 'weblate') %>% select(nCommitsCommitter, nCommitsAuthor, user.followers, user.public_gists, user.public_repos, user.login,'_id')
+users <- na.omit(users)
+```
+
+```{r}
+# select important fields for expertise outside the projects
+users_external_info <- users %>% select(user.followers, user.public_gists, user.public_repos)
+
+#Convert dates to timestamps
+#users_external_info <- users_external_info %>% mutate(user.created_at = as.numeric(as.POSIXct(user.created_at)), user.updated_at = as.numeric(as.POSIXct(user.updated_at)))
+
+#Scale fields
+users_external_info <- scale(users_external_info)
+head(users_external_info)
+```
+
+
+```{r}
+#Select important fields for expertise inside the projects
+users_internal_info <- users %>% select(nCommitsAuthor, nCommitsCommitter)
+#Scale fields
+users_internal_info <- scale(users_internal_info)
+head(users_internal_info)
+```
+
+### K-means
+```{r}
+kmeans2_internal <- kmeans(users_internal_info, centers = 2, nstart = 25)
+kmeans2_external <- kmeans(users_external_info, centers = 2, nstart = 25)
+
+#Set user cluster
+users$internal <- as.factor(kmeans2_internal$cluster)
+users$external <- as.factor(kmeans2_external$cluster)
+
+#Use the user kevinsawicki as reference for senior programmer
+internal_senior_cluster_label <- kmeans2_internal$cluster[users$user.login == 'kevinsawicki']
+external_senior_cluster_label <- kmeans2_external$cluster[users$user.login == 'kevinsawicki']
+
+expertise_labels <- as.factor(c('Junior','Senior'))
+
+#Update users expertise label
+users <- users %>% mutate(internal = case_when(
+  internal == internal_senior_cluster_label ~ expertise_labels[2],
+  internal != internal_senior_cluster_label ~ expertise_labels[1],
+))
+
+users <- users %>% mutate(external = case_when(
+  external == external_senior_cluster_label ~ expertise_labels[2],
+  external != external_senior_cluster_label ~ expertise_labels[1],
+))
+
+#Compare the two clusters
+print(adjustedRandIndex(users$internal, users$external))
+```
+
+
+```{r}
+p_cluster_internal <- fviz_cluster(kmeans2_internal, data=users_internal_info, axes = c(0,1), xlab = 'Scaled number of commits (author)', ylab = 'Scaled number of commits (committer)', main='') + theme_minimal() + scale_fill_grey(start = 0.5, end = 0.7, na.value = "red")
+p_cluster_external <- fviz_cluster(kmeans2_external, data=users_external_info, axes = c(0,1)) + scale_fill_grey(start = 0.5, end = 0.7, na.value = "red") + theme_minimal()
+
+save_plot(p_cluster_internal)
+print(p_cluster_internal)
+
+```
+
+```{r}
+
+p_users <- plot_users(users)
+save_plot(p_users)
+p_users
+
+```
+
+## RQ2.1 How does the distribution of developper updating test files compare to the contributors distribution
+
+```{r}
+#Get all unique users with at least one commit impacting a test file.
+user_changing_test_files <- commits_collection$aggregate('
+[
+    {
+        "$set": {
+            "diff": {
+                "$objectToArray": "$diff"
+            }
+        }
+    }, {
+        "$match": {
+            "diff.k": {"$regex": "(^tests?)|(tests?.java$)","$options":"i"}
+        }
+    }, {
+        "$group": {
+            "_id": "$users.author.github_id", 
+            "nCommitsChangingTestFile": {
+                "$sum": 1
+            }
+        }
+    }
+]
+')
+
+user_changing_test_files <- user_changing_test_files %>% inner_join(users, by = "_id")
+```
+
+
+```{r}
+p_user_changing_test_files <-  plot_users(user_changing_test_files)
+save_plot(p_user_changing_test_files)
+print(p_user_changing_test_files)
+
+```
+
+
+
+
+
+```{r}
+#Get file modifications
+files_modification <- commits_collection$aggregate('
+[
+    {
+      "$match":{
+          "users.author":{"$exists":1}
+      }
+    },
+    {
+        "$set": {
+            "author_id": "$users.author.github_id"
+        }
+    }, {
+        "$project": {
+            "diff": 1, 
+            "author_id": 1
+        }
+    }, {
+        "$set": {
+            "diff": {
+                "$objectToArray": "$diff"
+            }
+        }
+    }, {
+        "$unwind": "$diff"
+    }, {
+        "$project": {
+            "diff": 0
+        }
+    }
+]
+')
+
+files_modification <- files_modification %>% inner_join(users, by = c('author_id' = '_id'))
+```
+
+
+```{r}
+plot_users(files_modification)
+```
+
+
+
+
+
+```{r}
+#Get test files modifications
+test_files_modification <- commits_collection$aggregate('
+[
+    {
+        "$set": {
+            "author_id": "$users.author.github_id"
+        }
+    }, {
+        "$project": {
+            "users": 0, 
+            "author_email": 0, 
+            "author": 0, 
+            "commiter": 0, 
+            "commiter_email": 0, 
+            "subject": 0, 
+            "url": 0
+        }
+    }, {
+        "$set": {
+            "diff": {
+                "$objectToArray": "$diff"
+            }
+        }
+    }, {
+        "$project": {
+            "diff.v": 0
+        }
+    }, {
+        "$match": {
+            "diff.k": {
+                "$regex": "(^tests?)|(tests?.java$)", 
+                "$options": "i"
+            }
+        }
+    }, {
+        "$unwind": "$detection"
+    }, {
+        "$set": {
+            "file": "$detection.TestClass"
+        }
+    }, {
+        "$project": {
+            "detection.App": 0, 
+            "detection.TestClass": 0, 
+            "detection.TestFilePath": 0, 
+            "detection.ProductionFilePath": 0, 
+            "detection.RelativeTestFilePath": 0, 
+            "detection.NumberOfMethods": 0, 
+            "detection.RelativeProductionFilePath": 0
+        }
+    }, {
+        "$match": {
+            "$expr": {
+                "$in": [
+                    "$file", "$diff.k"
+                ]
+            }
+        }
+    }, {
+        "$project": {
+            "diff": 0
+        }
+    }
+]
+')
+
+test_files_modification <- test_files_modification %>% inner_join(users, by = c('author_id' = '_id'))
+```
+
+
+```{r}
+p_test_files_modification <- plot_users(test_files_modification)
+save_plot(p_test_files_modification)
+p_test_files_modification
+```
+
+## RQ2.2 How does the distribution of developper introducing test smell compare to the global distribution
+
+```{r}
+#Get variation in test smells between consecutive commits
+test_smells_variations <- commits_collection$aggregate('
+[
+    {
+        "$set": {
+            "author_id": "$users.author.github_id"
+        }
+    }, {
+        "$project": {
+            "users": 0, 
+            "author_email": 0, 
+            "author": 0, 
+            "commiter": 0, 
+            "commiter_email": 0, 
+            "subject": 0, 
+            "url": 0
+        }
+    }, {
+        "$set": {
+            "diff": {
+                "$objectToArray": "$diff"
+            }
+        }
+    }, {
+        "$project": {
+            "diff.v": 0
+        }
+    }, {
+        "$match": {
+            "diff.k": {
+                "$regex": "(^tests?)|(tests?.java$)", 
+                "$options": "i"
+            }
+        }
+    }, {
+        "$unwind": "$detection"
+    }, {
+        "$set": {
+            "file": "$detection.TestClass"
+        }
+    }, {
+        "$project": {
+            "detection.App": 0, 
+            "detection.TestClass": 0, 
+            "detection.TestFilePath": 0, 
+            "detection.ProductionFilePath": 0, 
+            "detection.RelativeTestFilePath": 0, 
+            "detection.NumberOfMethods": 0, 
+            "detection.RelativeProductionFilePath": 0
+        }
+    }, {
+        "$match": {
+            "$expr": {
+                "$in": [
+                    "$file", "$diff.k"
+                ]
+            }
+        }
+    }, {
+        "$project": {
+            "diff": 0
+        }
+    }, {
+        "$set": {
+            "author_timestamp": {
+                "$toLong": "$author_timestamp"
+            }, 
+            "commiter_timestamp": {
+                "$toLong": "$commiter_timestamp"
+            }
+        }
+    }, {
+        "$setWindowFields": {
+            "partitionBy": {
+                "app": "$app", 
+                "file": "$file"
+            }, 
+            "sortBy": {
+                "author_timestamp": 1
+            }, 
+            "output": {
+                "commitRank": {
+                    "$rank": {}
+                }
+            }
+        }
+    }, {
+        "$setWindowFields": {
+            "partitionBy": {
+                "app": "$app", 
+                "file": "$file"
+            }, 
+            "sortBy": {
+                "commitRank": 1
+            }, 
+            "output": {
+                "variationAssertionRoulette": {
+                    "$derivative": {
+                        "input": "$detection.Assertion Roulette"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationConditionalTestLogic": {
+                    "$derivative": {
+                        "input": "$detection.Conditional Test Logic"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationConstructorInitialization": {
+                    "$derivative": {
+                        "input": "$detection.Constructor Initialization"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationDefaultTest": {
+                    "$derivative": {
+                        "input": "$detection.Default Test"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationEmptyTest": {
+                    "$derivative": {
+                        "input": "$detection.EmptyTest"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationExceptionCatchingThrowing": {
+                    "$derivative": {
+                        "input": "$detection.Exception Catching Throwing"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationGeneralFixture": {
+                    "$derivative": {
+                        "input": "$detection.General Fixture"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationMysteryGuest": {
+                    "$derivative": {
+                        "input": "$detection.Mystery Guest"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationPrintStatement": {
+                    "$derivative": {
+                        "input": "$detection.Print Statement"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationRedundantAssertion": {
+                    "$derivative": {
+                        "input": "$detection.Redundant Assertion"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationSensitiveEquality": {
+                    "$derivative": {
+                        "input": "$detection.Sensitive Equality"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationVerboseTest": {
+                    "$derivative": {
+                        "input": "$detection.Verbose Test"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationSleepyTest": {
+                    "$derivative": {
+                        "input": "$detection.Sleepy Test"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationDuplicateAssert": {
+                    "$derivative": {
+                        "input": "$detection.Duplicate Assert"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationUnknowTest": {
+                    "$derivative": {
+                        "input": "$detection.Unknown Test"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationIgnoredTest": {
+                    "$derivative": {
+                        "input": "$detection.IgnoredTest"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationResourceOptimism": {
+                    "$derivative": {
+                        "input": "$detection.Resource Optimism"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationMagicNumberTest": {
+                    "$derivative": {
+                        "input": "$detection.Magic Number Test"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }, 
+                "variationDependentTest": {
+                    "$derivative": {
+                        "input": "$detection.Dependent Test"
+                    }, 
+                    "window": {
+                        "documents": [
+                            -1, 0
+                        ]
+                    }
+                }
+            }
+        }
+    }, {
+        "$sort": {
+            "app": 1, 
+            "file": 1, 
+            "commitRank": 1
+        }
+    }
+]
+')
+
+#Compute global variation
+test_smells_variations <- test_smells_variations %>% mutate(globalVariation = rowSums(select(., starts_with('variation'))))
+test_smells_variations <- test_smells_variations %>% inner_join(users, by = c('author_id' = '_id'))
+```
+
+
+```{r}
+#Extracts smelly commits
+smelly_test_file_modification <- test_smells_variations %>% filter(globalVariation > 0)
+#smelly_test_file_modification <- test_smells_variations %>% filter(if_any(starts_with('variation'), ~ . > 0))
+
+```
+
+```{r}
+p_smelly_test_file_modification <- plot_users(smelly_test_file_modification)
+save_plot(p_smelly_test_file_modification)
+p_smelly_test_file_modification
+```
+
+
+
+```{r}
+smelly_internal_test <- execute_test(test_files_modification$internal, smelly_test_file_modification$internal)
+
+smelly_external_test <- execute_test(test_files_modification$external, smelly_test_file_modification$external)
+
+print(smelly_internal_test)
+print(smelly_external_test)
+```
+### By smells type
+
+```{r}
+smelly_modification_by_type <- test_smells_variations %>% select(starts_with('variation'), internal, external) %>% gather(key='smells', value='count' ,-internal, -external) %>% gather(key='type', value='Expertise', -smells, -count) %>% filter(count > 0) %>% group_by(type, smells, Expertise) %>% summarise(count = n()) %>% mutate(percentage = count/sum(count)) %>% mutate(smells = stringr::str_replace(smells,"^variation",""))
+  
+p_smelly_modification_by_type_internal <- smelly_modification_by_type %>% filter(type == 'internal') %>% plot_by_types()
+  
+save_plot(p_smelly_modification_by_type_internal, heigth = 17)
+
+p_smelly_modification_by_type_external <-  smelly_modification_by_type %>% filter(type == 'external') %>% plot_by_types()
+
+
+save_plot(p_smelly_modification_by_type_external, heigth = 17)
+
+print(p_smelly_modification_by_type_internal)
+print(p_smelly_modification_by_type_external)
+```
+
+## RQ2.3 How does the distribution of developper removing test smell compare to the global distribution
+
+```{r}
+improving_test_file_modification <- test_smells_variations %>% filter(globalVariation < 0)
+
+
+```
+
+```{r}
+p_improving_test_file_modification <- plot_users(improving_test_file_modification)
+save_plot(p_improving_test_file_modification)
+print(p_improving_test_file_modification)
+```
+
+```{r}
+improving_internal_test <-execute_test(test_files_modification$internal, improving_test_file_modification$internal)
+
+improving_external_test <-execute_test(test_files_modification$external, improving_test_file_modification$external)
+
+print(improving_external_test)
+print(improving_internal_test)
+```
+
+```{r}
+
+improving_modification_by_type <- test_smells_variations %>% select(starts_with('variation'), internal, external) %>% gather(key='smells', value='count' ,-internal, -external) %>% gather(key='type', value='Expertise', -smells, -count) %>% filter(count < 0) %>% group_by(type, smells, Expertise) %>% summarise(count = n()) %>% mutate(percentage = count/sum(count)) %>% mutate(smells = stringr::str_replace(smells,"^variation",""))
+  
+p_improving_modification_by_type_internal <- improving_modification_by_type %>% filter(type == 'internal') %>% plot_by_types()
+
+save_plot(p_improving_modification_by_type_internal, heigth = 17)
+
+p_improving_modification_by_type_external <- improving_modification_by_type %>% filter(type == 'external') %>% plot_by_types()
+
+save_plot(p_improving_modification_by_type_external, heigth = 17)
+
+print(p_improving_modification_by_type_internal)
+print(p_improving_modification_by_type_external)
+```
+
+## Tables
+
+
+```{r}
+get_info <- function(data, metric, level){
+  if(metric == 'internal'){
+    nrow(data %>% filter(internal == level))
+  } else {
+    nrow(data %>% filter(external == level))
+  }
+}
+
+t <- data.frame(c(get_info(test_smells_variations,'internal','Senior'), 
+             get_info(smelly_test_file_modification,'internal','Senior'),
+             get_info(improving_test_file_modification,'internal','Senior')),
+           c(get_info(test_smells_variations,'external','Senior'),
+             get_info(smelly_test_file_modification,'external','Senior'),
+             get_info(improving_test_file_modification,'external','Senior')),
+           c(get_info(test_smells_variations,'internal','Junior'),
+             get_info(smelly_test_file_modification,'internal','Junior'),
+             get_info(improving_test_file_modification,'internal','Junior')),
+           c(get_info(test_smells_variations,'external','Junior'),
+             get_info(smelly_test_file_modification,'external','Junior'),
+             get_info(improving_test_file_modification,'external','Junior')))
+t$name <- c('All', 'Smelly', 'Refactoring')
+colnames(t) <- c('Internal|Senior', 'External|Senior','Internal|Junior' ,'External|Junior', 'Test file changes')
+
+table <- t %>% flextable(col_keys = c('Test file changes', 'Internal|Senior', 'Internal|Junior', 'External|Senior', 'External|Junior')) %>% colformat_int(big.mark = ' ')
+table
+table %>% save_as_image('images/summary.pdf', webshot = "webshot")
+
+```

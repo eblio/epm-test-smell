@@ -1,31 +1,501 @@
-use('g1-replication');
+use('epm-test-smell');
 
+
+
+/* Get subset of projects */
+
+// db.commits.aggregate(
+//     {$group: {
+//         _id:'$app',
+//         nCommits:{$sum:1},
+//         authors:{$addToSet:'$author'},
+//         commiters:{$addToSet:'$commiter'}
+//     }},
+//     {$unwind:'$authors'},
+//     {$group: {
+//         _id:{
+//             app:'$_id',
+//             nCommits:'$nCommits',
+//             commiters:'$commiters'
+//         },
+//         nAuthors: {$sum:1}
+//     }},
+//     {$unwind:'$_id.commiters'},
+//     {$group: {
+//         _id:{
+//             app:'$_id.app',
+//             nCommits:'$_id.nCommits',
+//             nAuthors:'$nAuthors'
+//         },
+//         nCommiters: {$sum:1}
+//     }},
+//     {$set:{nCommits:'$_id.nCommits', app:'$_id.app', nAuthors:'$_id.nAuthors'}},
+//     {$project:{_id:0}},
+//     {$sort:{'nAuthors':-1}}
+// );
+
+
+/* Get contributor information */
+// db.commits.aggregate(
+//     [
+//         {
+//             $set: {
+//                 'users': {$objectToArray: '$users'},
+//             }
+//         },
+//         {
+//             $unwind:'$users'
+//         },
+//         {
+//             //Remove bots
+//             $match: {
+//                 'users.v.type':'User',
+//                 'users.v.name':{$not:{$regex:'\(bot\)', $options:'i'}}
+//             }
+//         },
+//         {
+//             //group by user and get all informations
+//             $group: {
+//                 _id: '$users.v.github_id',
+//                 nCommits: {
+//                     $sum: 1
+//                 },
+//                 nCommitsAuthor: {
+//                     '$sum': {
+//                         '$cond': [
+//                             { '$eq': ['$users.k', 'author']},
+//                             1,
+//                             0
+//                         ]
+//                     }
+//                 },
+//                 nCommitsCommitter: {
+//                     '$sum': {
+//                         '$cond': [
+//                             { '$eq': ['$users.k', 'committer']},
+//                             1,
+//                             0
+//                         ]
+//                     }
+//                 },
+//                 user:{$last:'$users.v'}
+//             },
+//         },
+//         {
+//             //Remove github_id since already in _id
+//             $project:{
+//                 'user.github_id':0
+//             }
+//         },
+//         {
+//             //Sort by number of commits
+//             $sort: {
+//                 nCommits: -1
+//             }
+//         },
+//         // {
+//         //     $count:'total'
+//         // }
+//     ]
+// )
+
+
+/* ============================================ */
+/* Test file change author */
+/* ============================================ */
 db.commits.aggregate(
-    {$group: {
-        _id:'$app',
-        nCommits:{$sum:1},
-        authors:{$addToSet:'$author'},
-        commiters:{$addToSet:'$commiter'}
-    }},
-    {$unwind:'$authors'},
-    {$group: {
-        _id:{
-            app:'$_id',
-            nCommits:'$nCommits',
-            commiters:'$commiters'
+    [
+        {
+            $match:{
+                'users.author':{$exists:1}
+            }
         },
-        nAuthors: {$sum:1}
-    }},
-    {$unwind:'$_id.commiters'},
-    {$group: {
-        _id:{
-            app:'$_id.app',
-            nCommits:'$_id.nCommits',
-            nAuthors:'$nAuthors'
+        {
+            $set:{
+                'author_id': '$users.author.github_id'
+            }
         },
-        nCommiters: {$sum:1}
-    }},
-    {$set:{nCommits:'$_id.nCommits', app:'$_id.app', nAuthors:'$_id.nAuthors'}},
-    {$project:{_id:0}},
-    {$sort:{'nAuthors':-1}}
-);
+        {
+            //Remove unused info
+            $project: {
+                'diff':1,
+                'author_id':1
+            }
+        },
+        {
+            //Convert diff to array since filename contains '.'
+            '$set': {
+                'diff': {
+                    '$objectToArray': '$diff'
+                }
+            }
+        },
+        {
+            $unwind:'$diff'
+        },
+        {
+            $project:{
+                'diff':0
+            }
+        },
+        {
+            $count:'files'
+        }
+
+    ]
+)
+
+
+
+/* ============================================ */
+/* Test file change author */
+/* ============================================ */
+// db.commits.aggregate(
+//     [
+//         {
+//             //Convert diff to array since filename contains '.'
+//             '$set': {
+//                 'diff': {
+//                     '$objectToArray': '$diff'
+//                 }
+//             }
+//         },
+//         {
+//             //Match test files
+//             $match:{
+//                 'diff.k':/(^tests?)|(tests?.java$)/i
+//             }
+//         },
+//         {
+//             $group:{
+//                 '_id':'$users.author.github_id',
+//                 'nCommitsChangingTestFile':{$sum:1}
+//             }
+//         },
+//         // {
+//         //     $count:'testfile'
+//         // }
+
+//     ]
+// )
+
+/* ============================================ */
+/* Test smells introduction */
+/* ============================================ */
+
+// db.getCollection('commits').aggregate(
+//     [
+//         {
+//             //Set author id
+//             $set:{
+//                 'author_id': '$users.author.github_id'
+//             }
+//         },
+//         {
+//             //Remove unused info
+//             $project: {
+//                 'users':0,
+//                 'author_email':0,
+//                 'author':0,
+//                 'commiter':0,
+//                 'commiter_email':0,
+//                 'subject':0,
+//                 'url':0
+//             }
+//         },
+//         {
+//             //Convert diff to array since filename contains '.'
+//             //Allow search for test file
+//             '$set': {
+//                 'diff': {
+//                     '$objectToArray': '$diff'
+//                 }
+//             }
+//         },
+//         {
+//             $project:{
+//                 //Hide diff values to improve performance
+//                 'diff.v':0
+//             }
+//         },
+//         {
+//             //Match all commits changing test files
+//             $match:{
+//                 'diff.k': {'$regex':'(^tests?)|(tests?.java$)', '$options':'i'}
+//             }
+//         },
+//         {
+//             //Split document for each detection
+//             '$unwind':'$detection'
+//         },
+//         {
+//             //Set relate test file
+//             '$set':{
+//                 'file':'$detection.TestClass'
+//             }
+//         },
+//         {
+//             //Remove old detection fields
+//             '$project':{
+//                 'detection.App':0,
+//                 'detection.TestClass':0,
+//                 'detection.TestFilePath':0,
+//                 'detection.ProductionFilePath':0,
+//                 'detection.RelativeTestFilePath':0,
+//                 'detection.NumberOfMethods':0,
+//                 'detection.RelativeProductionFilePath':0
+//             }
+//         },
+//         {
+//             //Check if the current commit update the relate test file
+//             '$match': {
+//                 $expr:{
+//                     '$in': ["$file", '$diff.k']
+//                 }
+//             }
+//         },
+//         {
+//             //remove diff
+//             $project:{
+//                 'diff':0
+//             }
+//         },
+//         {
+//             //Convert timestamp into long
+//             '$set': {
+//                 'author_timestamp': {
+//                     '$toLong': '$author_timestamp'
+//                 },
+//                 'commiter_timestamp': {
+//                     '$toLong': '$commiter_timestamp'
+//                 }
+//             }
+//         },
+//         {
+//             '$setWindowFields': {
+//                 partitionBy: {
+//                     'app': '$app',
+//                     'file': '$file'
+//                 },
+//                 sortBy: {
+//                     'author_timestamp': 1,
+//                 },
+//                 output: {
+//                     commitRank: {
+//                         $rank: {}
+//                     }
+//                 }
+//             }
+//         },
+//         {
+//             '$setWindowFields': {
+//                 partitionBy: {
+//                     'app': '$app',
+//                     'file': '$file'
+//                 },
+//                 sortBy: {
+//                     'commitRank':1
+//                 },
+//                 output: {
+//                     variationAssertionRoulette:{
+//                         $derivative:{
+//                             input:'$detection.Assertion Roulette'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationConditionalTestLogic:{
+//                         $derivative:{
+//                             input:'$detection.Conditional Test Logic'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationConstructorInitialization:{
+//                         $derivative:{
+//                             input:'$detection.Constructor Initialization'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationDefaultTest:{
+//                         $derivative:{
+//                             input:'$detection.Default Test'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationEmptyTest:{
+//                         $derivative:{
+//                             input:'$detection.EmptyTest'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+
+//                     variationExceptionCatchingThrowing:{
+//                         $derivative:{
+//                             input:'$detection.Exception Catching Throwing'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationGeneralFixture:{
+//                         $derivative:{
+//                             input:'$detection.General Fixture'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationMysteryGuest:{
+//                         $derivative:{
+//                             input:'$detection.Mystery Guest'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationPrintStatement:{
+//                         $derivative:{
+//                             input:'$detection.Print Statement'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationRedundantAssertion:{
+//                         $derivative:{
+//                             input:'$detection.Redundant Assertion'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationSensitiveEquality:{
+//                         $derivative:{
+//                             input:'$detection.Sensitive Equality'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationVerboseTest:{
+//                         $derivative:{
+//                             input:'$detection.Verbose Test'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationSleepyTest:{
+//                         $derivative:{
+//                             input:'$detection.Sleepy Test'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationDuplicateAssert:{
+//                         $derivative:{
+//                             input:'$detection.Duplicate Assert'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationUnknowTest:{
+//                         $derivative:{
+//                             input:'$detection.Unknown Test'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationIgnoredTest:{
+//                         $derivative:{
+//                             input:'$detection.IgnoredTest'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationResourceOptimism:{
+//                         $derivative:{
+//                             input:'$detection.Resource Optimism'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationMagicNumberTest:{
+//                         $derivative:{
+//                             input:'$detection.Magic Number Test'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+//                     variationDependentTest:{
+//                         $derivative:{
+//                             input:'$detection.Dependent Test'
+//                         },
+//                         window:{
+//                             documents:[-1,0]
+//                         }
+//                     },
+
+//                 }
+//             }
+//         },
+//         {
+//             $sort:{
+//                 'app':1,
+//                 'file':1,
+//                 'commitRank':1
+//             }
+//         },
+//     ],
+//     {
+//         allowDiskUse: true
+//     }
+// );
+
+//Find same user with different info
+// db.commits.aggregate(
+//     [
+//         {
+//             $match: {
+//                 'user.type':'User',
+//                 'user.name':{$not:{$regex:'\(bot\)'}}
+//             }
+//         },
+//         {
+//             $group:{
+//                 _id:'$user',
+//             }
+//         },
+//         {
+//             $group:{
+//                 _id:'$_id.github_id',
+//                 count:{$sum:1}
+//             }
+//         },
+//         {
+//             $match:{
+//                 count:{$gt:1}
+//             }
+//         }
+//     ]
+// )
+
+// // db.commits.find
+// db.commits.distinct('user',{
+//     'user.github_id':604615
+// })
